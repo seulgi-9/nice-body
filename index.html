@@ -209,6 +209,13 @@
     </div>
   </div>
 
+  <div class="q">
+    <div class="ql">⑧ 내 헬스장 (선택)</div>
+    <div class="qs">이름은 기록용이에요. 아래에서 <b>우리 헬스장에 있는 기구만</b> 켜두면(없는 건 끄기), 그 기구로만 스케줄을 짜고 없는 운동은 비슷한 걸로 대체해요.</div>
+    <input type="text" id="q-gym" placeholder="예: 비스짐 태평 1호점" style="margin-bottom:12px">
+    <div class="chips" id="q-equip"></div>
+  </div>
+
   <button class="startbtn" onclick="submitOnboard()">내 스케줄 만들기 🚀</button>
   <div class="err" id="obErr"></div>
 </div>
@@ -402,6 +409,12 @@ const PAIN_L={shoulder:"어깨",wrist:"손목",knee:"무릎",back:"허리",foot:
 const DOW_KR=["일","월","화","수","목","금","토"];
 const DEFAULT_DAYS={2:[2,5],3:[1,3,5],4:[2,3,5,6],5:[1,2,3,5,6],6:[1,2,3,4,5,6]};
 const PALETTE=["#ff8e8e","#5b9dff","#3ddc97","#b07cff","#ffb648","#ff6b6b"];
+/* 헬스장 기구: 운동별 필요 기구(REQ), 없을 때 대체(ALT), 설문 체크리스트(EQUIP_LIST) */
+const REQ={leg_press:"legpress",goblet_squat:"dumbbell",leg_extension:"legcurlext",leg_curl:"legcurlext",romanian_deadlift:"dumbbell",hip_abduction:"hipab",hip_thrust:null,calf_raise:null,lat_pulldown:"latpull",seated_row:"row",one_arm_row:"dumbbell",chest_press:"chestpress",pec_deck:"pecdeck",shoulder_press:"shoulderpress",face_pull:"cable",biceps_curl:"dumbbell",plank:null,ab_crunch:null,stationary_bike:"bike",elliptical:"elliptical"};
+const ALT={leg_press:["goblet_squat"],goblet_squat:["leg_press"],leg_extension:["leg_press","goblet_squat"],leg_curl:["romanian_deadlift"],romanian_deadlift:["leg_curl"],hip_abduction:["hip_thrust"],lat_pulldown:["seated_row","one_arm_row"],seated_row:["lat_pulldown","one_arm_row"],one_arm_row:["seated_row","lat_pulldown"],chest_press:["pec_deck"],pec_deck:["chest_press"],shoulder_press:["face_pull","pec_deck"],face_pull:["seated_row"],stationary_bike:["elliptical"],elliptical:["stationary_bike"]};
+const EQUIP_LIST=[["legpress","레그 프레스"],["legcurlext","레그 컬/익스텐션"],["hipab","힙 어브덕션 머신"],["latpull","랫 풀다운"],["row","시티드 로우(케이블)"],["chestpress","체스트 프레스"],["pecdeck","펙덱(가슴 플라이)"],["shoulderpress","숄더 프레스 머신"],["cable","케이블 머신"],["dumbbell","덤벨"],["bike","실내 자전거"],["elliptical","일립티컬"]];
+function availReq(req){if(!req)return true;const eq=profile&&profile.equip;if(!eq||eq.length===0)return true;return eq.includes(req);}
+function resolveEquip(id){if(availReq(REQ[id]))return id;const alts=ALT[id]||[];for(let i=0;i<alts.length;i++){if(availReq(REQ[alts[i]]))return alts[i];}return null;}
 
 /* ===== 저장소 ===== */
 const LS={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v===null?d:v;}catch(e){return d;}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
@@ -466,7 +479,9 @@ function generatePlan(){
     let core=ids.filter(id=>EX[id].type==="core").slice(0,focus.includes("core")?2:1);
     let card=ids.filter(id=>EX[id].type==="cardio").slice(0,1);
     if(card.length===0)card=["elliptical"];
-    const finalIds=[...str,...core,...card];
+    let finalIds=[...str,...core,...card];
+    finalIds=finalIds.map(resolveEquip).filter(Boolean);           // 헬스장에 없는 기구는 대체/제거
+    finalIds=finalIds.filter((v,i)=>finalIds.indexOf(v)===i);       // 대체 후 중복 제거
     const exArr=finalIds.map(id=>{
       const e=EX[id];let sets,rest;
       if(e.type==="str"){sets=g.sets+" × "+g.reps;rest=g.rest;}
@@ -524,6 +539,8 @@ function submitOnboard(){
   const goals=getMulti("q-goal");
   const focus=getMulti("q-focus");
   const pains=getMulti("q-pains").filter(p=>p!=="none");
+  const gym=document.getElementById("q-gym").value.trim();
+  const equip=getMulti("q-equip");
   const err=document.getElementById("obErr");
   if(!gender){err.textContent="성별을 선택해 주세요.";return;}
   if(!height||!weight){err.textContent="키와 몸무게를 입력해 주세요.";return;}
@@ -532,7 +549,7 @@ function submitOnboard(){
   if(goals.length===0){err.textContent="운동 목표를 1개 이상 선택해 주세요.";return;}
   if(focus.length===0){err.textContent="원하는 몸을 1개 이상 선택해 주세요.";return;}
   err.textContent="";
-  profile={gender,height,weight,age,exp,goals,focus,pains,startDate:todayKey()};
+  profile={gender,height,weight,age,exp,goals,focus,pains,gym,equip,startDate:todayKey()};
   settings={days:[...(DEFAULT_DAYS[freq]||[1,3,5])]};
   LS.set("hs_profile",profile);LS.set("hs_settings",settings);
   document.getElementById("onboard").classList.remove("show");
@@ -550,6 +567,9 @@ function reOnboard(){
     document.querySelectorAll("#q-focus .chip").forEach(c=>c.classList.toggle("sel",profile.focus.includes(c.getAttribute("data-v"))));
     const pains=profile.pains||[];
     document.querySelectorAll("#q-pains .chip").forEach(c=>{const v=c.getAttribute("data-v");c.classList.toggle("sel",v==="none"?pains.length===0:pains.includes(v));});
+    document.getElementById("q-gym").value=profile.gym||"";
+    const eq=profile.equip;
+    document.querySelectorAll("#q-equip .chip").forEach(c=>c.classList.toggle("sel",(!eq||eq.length===0)?true:eq.includes(c.getAttribute("data-v"))));
   }
   document.getElementById("onboard").classList.add("show");
   window.scrollTo(0,0);
@@ -594,6 +614,8 @@ function renderHome(){
   if(profile.focus.length)why.push(`원하는 몸: <b>${profile.focus.map(f=>FOCUS_L[f]).join(", ")}</b> → 해당 부위 볼륨을 더 넣었어요.`);
   const pains=(profile.pains||[]).filter(p=>p!=="none");
   if(pains.length)why.push(`주의 부위: <b>${pains.map(p=>PAIN_L[p]).join(", ")}</b> → 부담 큰 동작은 빼거나 대체했어요.`);
+  if(profile.gym)why.push(`🏋️ <b>${profile.gym}</b> 기준.`);
+  if(profile.equip&&profile.equip.length&&profile.equip.length<EQUIP_LIST.length)why.push(`체크 안 한 기구는 비슷한 운동으로 대체했어요.`);
   document.getElementById("planWhy").innerHTML="🎯 "+why.join(" ");
   // 요일
   const dp=document.getElementById("dayPick");
@@ -880,6 +902,7 @@ function bootMain(){
 (function init(){
   document.getElementById("b_date").value=isoToday();
   document.getElementById("m_date").value=isoToday();
+  document.getElementById("q-equip").innerHTML=EQUIP_LIST.map(e=>`<div class="chip sel" data-v="${e[0]}">${e[1]}</div>`).join("");
   initChips();initMealChips();initFastChips();
   if(fastState){fastCustom=false;fastSel=fastState.target;}
   setInterval(updateFastDisplay,1000);
