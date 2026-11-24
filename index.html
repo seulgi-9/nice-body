@@ -341,7 +341,7 @@
     <div class="note" style="margin-top:14px">💡 실제 기구가 다르면 참고용 영상으로 자세만 익히고, 비슷한 머신으로 대체해도 OK.</div>
   </div>
 </div>
-<footer>나이스 바디 · 홈 화면에 추가해서 앱처럼 쓰세요 📲<br>모든 기록은 이 폰에 자동 저장돼요</footer>
+<footer>나이스 바디 · 홈 화면에 추가해서 앱처럼 쓰세요 📲<br>모든 기록은 이 폰에 자동 저장돼요<br><span id="userCount" style="color:var(--pink2);font-weight:700"></span></footer>
 <div id="photoView" onclick="this.style.display='none'" style="display:none;position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.93);align-items:center;justify-content:center">
   <img id="photoViewImg" style="max-width:94%;max-height:90%;border-radius:12px">
 </div>
@@ -894,6 +894,20 @@ function updateFastDisplay(){
     st.innerHTML=`식사까지 <b>${rh}시간 ${rm}분</b> 남음`;st.style.color="var(--sub)";}
 }
 
+/* ===== 사용자 수 카운터(개인정보 없이 숫자만) ===== */
+function countUser(){
+  const base="https://abacus.jasoncameron.dev", ns="nice-body-seulgi", key="users";
+  const already=localStorage.getItem("hs_counted");
+  const url=already?(base+"/get/"+ns+"/"+key):(base+"/hit/"+ns+"/"+key);
+  fetch(url).then(r=>r.json()).then(d=>{
+    if(d&&typeof d.value==="number"){
+      localStorage.setItem("hs_counted","1");
+      const el=document.getElementById("userCount");
+      if(el) el.textContent="👟 지금까지 "+d.value.toLocaleString()+"명이 함께하고 있어요";
+    }
+  }).catch(function(){});
+}
+
 /* ===== 부팅 ===== */
 function bootMain(){
   buildTabs();renderCalHead();generatePlan();if(!DAYS[curDay])curDay=ORDER[0];
@@ -903,6 +917,7 @@ function bootMain(){
   document.getElementById("b_date").value=isoToday();
   document.getElementById("m_date").value=isoToday();
   document.getElementById("q-equip").innerHTML=EQUIP_LIST.map(e=>`<div class="chip sel" data-v="${e[0]}">${e[1]}</div>`).join("");
+  countUser();
   initChips();initMealChips();initFastChips();
   if(fastState){fastCustom=false;fastSel=fastState.target;}
   setInterval(updateFastDisplay,1000);
